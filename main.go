@@ -3,7 +3,6 @@ package main
 import (
 	"encoding/csv"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"log"
 	"os"
@@ -33,41 +32,65 @@ func readCsvFile(filePath string) []string {
 	return urls
 }
 
-func readFeed(fp *gofeed.Parser, url string) (json.RawMessage, error) {
-	// feed, err := fp.ParseURL("https://tech.groww.in/feed")
-	// if err != nil {
-	// 	log.Fatalf("Feed parse error %v", err)
-	// }
-	// fmt.Println(feed.Title)
+func readFeed(fp *gofeed.Parser, url string, maxItems int, maxContentLen int) (*gofeed.Feed, error) {
+	feed, err := fp.ParseURL(url)
+	if err != nil {
+		return nil, err
+	}
 
-	return nil, errors.New("not implemented")
-}
+	if len(feed.Items) > maxItems {
+		feed.Items = feed.Items[:maxItems]
+	}
 
-func writeJson(fileName string, contents json.RawMessage) error {
-	return errors.New("not implemented")
+	for i := range feed.Items {
+		if len(feed.Items[i].Content) > maxContentLen {
+			feed.Items[i].Content = feed.Items[i].Content[:maxContentLen] + "..."
+		}
+	}
+
+	return feed, nil
 }
 
 func main() {
-	urls := readCsvFile("selecturls_2022-11-20T18_27_39.403218Z.csv")
-	fmt.Println(urls)
-	fp := gofeed.NewParser()
 
-	for i, url := range urls {
-		j, err := readFeed(fp, url)
+	args := os.Args[1:]
+	if len(args) == 0 || args[0] == "" {
+		log.Fatal("invalid args")
+	}
+
+	urls := readCsvFile(args[0])
+	// fmt.Println(urls)
+
+	fp := gofeed.NewParser()
+	feeds := make([]*gofeed.Feed, 0, len(urls))
+	feedErrors := make([]string, 0)
+
+	for _, url := range urls {
+		f, err := readFeed(fp, url, 3, 64)
 
 		if err != nil {
+			feedErrors = append(feedErrors, url)
 			fmt.Println(fmt.Sprintf("%s feed error: %s", url, err.Error()))
 			continue
 		}
 
-		err = writeJson(fmt.Sprintf("%d.json", i), j)
-		if err != nil {
-			fmt.Println(fmt.Sprintf("%d file write error: %s", i, err.Error()))
-			continue
-		}
+		feeds = append(feeds, f)
 
 		fmt.Println(fmt.Sprintf("%s feed processed", url))
 	}
 
+	j, err := json.MarshalIndent(feeds, "", "  ")
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	// fmt.Println(string(j))
+
+	err = os.WriteFile("out.json", j, 0644)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	fmt.Println(fmt.Sprintf("Errors: %d", len(feedErrors)))
 	fmt.Println("Done")
 }

@@ -10,6 +10,11 @@ import (
 	"github.com/mmcdole/gofeed"
 )
 
+const (
+	maxItems      = 1024
+	maxContentLen = 1024 * 1024
+)
+
 func readCsvFile(filePath string) []string {
 	f, err := os.Open(filePath)
 	if err != nil {
@@ -51,6 +56,19 @@ func readFeed(fp *gofeed.Parser, url string, maxItems int, maxContentLen int) (*
 	return feed, nil
 }
 
+type feedEntry struct {
+	Title     string `json:"title"`
+	URL       string `json:"url"`
+	Updated   string `json:"updated"`
+	Published string `json:"published"`
+}
+
+type feed struct {
+	Title   string      `json:"title"`
+	URL     string      `json:"url"`
+	Entries []feedEntry `json:"entries"`
+}
+
 func main() {
 
 	args := os.Args[1:]
@@ -62,11 +80,12 @@ func main() {
 	// fmt.Println(urls)
 
 	fp := gofeed.NewParser()
-	feeds := make([]*gofeed.Feed, 0, len(urls))
+	// feeds := make([]*gofeed.Feed, 0, len(urls))
+	feeds := make([]feed, 0, len(urls))
 	feedErrors := make([]string, 0)
 
-	for _, url := range urls {
-		f, err := readFeed(fp, url, 3, 64)
+	for i, url := range urls {
+		gofeed, err := readFeed(fp, url, maxItems, maxContentLen)
 
 		if err != nil {
 			feedErrors = append(feedErrors, url)
@@ -74,9 +93,24 @@ func main() {
 			continue
 		}
 
+		f := feed{
+			Title:   gofeed.Title,
+			URL:     url,
+			Entries: make([]feedEntry, len(gofeed.Items)),
+		}
+
+		for i, fi := range gofeed.Items {
+			f.Entries[i] = feedEntry{
+				Title:     fi.Title,
+				URL:       fi.Link,
+				Updated:   fi.Updated,
+				Published: fi.Published,
+			}
+		}
+
 		feeds = append(feeds, f)
 
-		fmt.Println(fmt.Sprintf("%s feed processed", url))
+		fmt.Println(fmt.Sprintf("%d: %s feed processed", i, url))
 	}
 
 	j, err := json.MarshalIndent(feeds, "", "  ")

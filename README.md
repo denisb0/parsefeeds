@@ -1,6 +1,6 @@
 test for gofeed library functionality
 
-usage: `parsefeeds input.csv`
+usage: `go run main.go input.csv`
 
 Input file should just contain urls of feeds (separated by newline)
 
